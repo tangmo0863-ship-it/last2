@@ -92,7 +92,7 @@ def render(ctx):
         m3_badge, m3_desc = "BEARISH", "แนวโน้มเป็นขาลงและมีความเสี่ยงต่อการปรับตัวลดลง"
 
     if m4_no_edge:
-        m4_badge, m4_desc = "NO EDGE", "โมเดล AI ยังทำนายได้ไม่ดีกว่าการเดาแบบง่าย จึงไม่นำมาให้คะแนน"
+        m4_badge, m4_desc = "NO EDGE", "โมเดล AI ยังทำนายไม่ดีกว่าการเดาแบบง่าย (baseline)"
     elif m4_s >= 70:
         m4_badge, m4_desc = "POSITIVE", "โมเดล AI ประเมินโอกาสปรับตัวขึ้นในระดับที่ดี"
     elif m4_s >= 50:

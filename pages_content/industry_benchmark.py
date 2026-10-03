@@ -396,9 +396,11 @@ def render(ctx):
 
         def dim_pct_card(label, pct, color):
             if pct is None:
-                return f"""<div style="background:#0F172A; padding:6px 4px; border-radius:6px; border:1px solid #1E293B;">
-    <div style="color:#94A3B8; font-size:12px;">{label}</div><div style="color:#64748B; font-size:15px; font-weight:bold; margin:2px 0;">N/A</div>
-    <div style="color:#64748B; font-size:12px;">No data</div></div>"""
+                # [FIX-UI5] การ์ดว่างใช้โทนสว่างเหมือนการ์ดอื่น (เดิมพื้นดำโดดออกมา) และบอกเหตุผลให้ตรง
+                why = "No edge" if label == "AI Prediction" else "No data"
+                return f"""<div style="background:#F8FAFC; padding:6px 4px; border-radius:6px; border:1px solid #E2E8F0;">
+    <div style="color:#64748B; font-size:12px;">{label}</div><div style="color:#94A3B8; font-size:15px; font-weight:bold; margin:2px 0;">N/A</div>
+    <div style="color:#94A3B8; font-size:12px;">{why}</div></div>"""
             tier = "Excellent" if pct <= 20 else ("Good" if pct <= 45 else ("Fair" if pct <= 70 else "Weak"))
             return f"""<div style="background:#F8FAFC; padding:6px 4px; border-radius:6px; border:1px solid #E2E8F0;">
     <div style="color:#64748B; font-size:12px;">{label}</div><div style="color:{color}; font-size:16px; font-weight:bold; margin:2px 0;">Top {max(pct,1)}%</div>
@@ -436,7 +438,9 @@ def render(ctx):
 
     # ---------------- RADAR: STOCK vs SECTOR AVG ----------------
     with r2_c2:
-        cats = ['Health', 'Valuation', 'Timing', 'AI Pred.', 'Risk', 'Industry']
+        _ai_raw = ctx.stock_info.get('ai_score')
+        _ai_na = _ai_raw is None or (isinstance(_ai_raw, float) and np.isnan(_ai_raw))
+        cats = ['Health', 'Valuation', 'Timing', 'AI Pred. (N/A)' if _ai_na else 'AI Pred.', 'Risk', 'Industry']
 
         stock_vals = [
             safe(ctx.stock_info.get('health_score')),
@@ -500,7 +504,10 @@ def render(ctx):
     # ---------------- PEER COMPARISON (เต็มความกว้าง แทนที่ตำแหน่ง Dimension Percentile Rank เดิม) ----------------
     peers_sorted = ctx.sector_peers.sort_values('overall_score', ascending=False)
 
-    def badge(val, thresholds, labels, colors):
+    def badge(val, thresholds, labels, colors, na_label="N/A"):
+        # [FIX-UI5] ค่าว่าง (เช่น AI NO EDGE) เดิมตกไปเป็นระดับต่ำสุด → ขึ้น "Bearish" สีแดงผิดความจริง
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            return f'<span style="color:#94A3B8;">{na_label}</span>'
         for th, lab, col in zip(thresholds, labels, colors):
             if val >= th:
                 return f'<span style="color:{col}; font-weight:bold;">{lab}</span>'
@@ -549,7 +556,8 @@ def render(ctx):
         # FIX: Neutral เดิมเป็นสีเทา (#64748B) เปลี่ยนเป็นเหลือง (#F59E0B) ให้เห็นชัดว่าอยู่โซนกลาง
         ai_b = badge(
             p['ai_score'], [65, 45, 0],
-            ["Bullish", "Neutral", "Bearish"], ["#10B981", "#F59E0B", "#EF4444"]
+            ["Bullish", "Neutral", "Bearish"], ["#10B981", "#F59E0B", "#EF4444"],
+            na_label="No Edge"
         )
 
         risk_b = "Low" if p['risk_score'] >= 65 else ("Medium" if p['risk_score'] >= 40 else "High")

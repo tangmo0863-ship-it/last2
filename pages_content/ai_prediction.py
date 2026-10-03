@@ -190,7 +190,7 @@ def render(ctx):
     ai_no_edge = _raw_ai is None or (isinstance(_raw_ai, float) and np.isnan(_raw_ai))
     ai_score_val = 0 if ai_no_edge else int(round(safe(_raw_ai, 0)))
     if ai_no_edge:
-        score_badge, score_desc = "NO EDGE", "โมเดลยังทำนายได้ไม่ดีกว่าการเดาแบบง่าย จึงไม่นำมาให้คะแนน"
+        score_badge, score_desc = "NO EDGE", "ไม่ชนะ baseline"
     elif ai_score_val >= 70:
         score_badge, score_desc = "POSITIVE", "โอกาสปรับตัวขึ้นในระดับที่ดี"
     elif ai_score_val >= 50:
@@ -450,7 +450,8 @@ def render(ctx):
         periods=horizon_days + 1
     )[1:]
 
-    drift = (prob_up - 50) / 50 * daily_vol * horizon_days
+    # [FIX-UI4] โมเดล NO EDGE → ไม่แสดงทิศทาง (เส้นกลางแบนที่ราคาปัจจุบัน) เหลือแค่ช่วงความผันผวนจริง
+    drift = 0.0 if ai_no_edge else (prob_up - 50) / 50 * daily_vol * horizon_days
     t_arr = np.arange(1, horizon_days + 1)
 
     median_path = ctx.current_price * (1 + drift * (t_arr / horizon_days))
@@ -472,14 +473,14 @@ def render(ctx):
             x=future_dates, y=upper_path, mode='lines',
             line=dict(width=0), fill='tonexty',
             fillcolor=_hex_to_rgba(status_color, 0.18),
-            name='Prediction Range', hoverinfo='skip'
+            name='Volatility Range (80%)' if ai_no_edge else 'Prediction Range', hoverinfo='skip'
         )
     )
     fig_forecast.add_trace(
         go.Scatter(
             x=future_dates, y=median_path, mode='lines',
             line=dict(color=status_color, width=2.2, dash='dash'),
-            name='Model Forecast (Median)'
+            name='No Directional View (NO EDGE)' if ai_no_edge else 'Model Forecast (Median)'
         )
     )
     fig_forecast.add_trace(
