@@ -89,7 +89,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
-from common import fmt_mb, fmt_ratio, safe, render_nav_footer, COMPANY_NAMES, SECTOR_MAP
+from common import fmt_mb, fmt_ratio, safe, render_nav_footer, render_chart_note, COMPANY_NAMES, SECTOR_MAP
 
 
 def render(ctx):
@@ -233,6 +233,7 @@ def render(ctx):
             use_container_width=True,
             config={"displayModeBar": True, "displaylogo": False},
         )
+        render_chart_note("industry_matrix")
 
     st.markdown("""
     <style>
@@ -440,25 +441,25 @@ def render(ctx):
     with r2_c2:
         _ai_raw = ctx.stock_info.get('ai_score')
         _ai_na = _ai_raw is None or (isinstance(_ai_raw, float) and np.isnan(_ai_raw))
-        cats = ['Health', 'Valuation', 'Timing', 'AI Pred. (N/A)' if _ai_na else 'AI Pred.', 'Risk', 'Industry']
 
-        stock_vals = [
-            safe(ctx.stock_info.get('health_score')),
-            safe(ctx.stock_info.get('valuation_score')),
-            safe(ctx.stock_info.get('timing_score')),
-            safe(ctx.stock_info.get('ai_score')),
-            safe(ctx.stock_info.get('risk_score')),
-            safe(ctx.stock_info.get('industry_score'))
+        # [FIX-UI6] (1) ปิดเส้นเรดาร์: Plotly ไม่ลากเส้นจากจุดสุดท้ายกลับจุดแรกเอง ต้องใส่จุดแรกซ้ำต่อท้าย
+        #           (2) AI ที่ NO EDGE ไม่มีคะแนน — เดิมวาดเป็น 0 ทำให้เส้นดิ่งเข้ากลางวงเหมือนได้ 0 คะแนน
+        #               ตอนนี้ตัดแกน AI ออก (เรดาร์เหลือ 5 มิติ) ทั้งของหุ้นและค่าเฉลี่ยกลุ่ม
+        radar_dims = [
+            ('Health', 'health_score'), ('Valuation', 'valuation_score'), ('Timing', 'timing_score'),
+            ('AI Pred.', 'ai_score'), ('Risk', 'risk_score'), ('Industry', 'industry_score'),
         ]
+        if _ai_na:
+            radar_dims = [d for d in radar_dims if d[1] != 'ai_score']
+        cats = [label for label, _ in radar_dims]
+        stock_vals = [safe(ctx.stock_info.get(col)) for _, col in radar_dims]
+        sector_avg_vals = [safe(ctx.sector_peers[col].mean()) for _, col in radar_dims]
 
-        sector_avg_vals = [
-            ctx.sector_peers['health_score'].mean(),
-            ctx.sector_peers['valuation_score'].mean(),
-            ctx.sector_peers['timing_score'].mean(),
-            ctx.sector_peers['ai_score'].mean(),
-            ctx.sector_peers['risk_score'].mean(),
-            ctx.sector_peers['industry_score'].mean()
-        ]
+        def _closed(values, labels):
+            return values + values[:1], labels + labels[:1]
+
+        stock_r, stock_theta = _closed(stock_vals, cats)
+        sector_r, sector_theta = _closed(sector_avg_vals, cats)
 
         radar_color = {5: "#10B981", 4: "#F59E0B", 3: "#F59E0B", 2: "#EF4444", 1: "#EF4444"}.get(pos_stars, "#64748B")
         fill_color = {
@@ -469,11 +470,11 @@ def render(ctx):
         fig_radar = go.Figure()
 
         fig_radar.add_trace(go.Scatterpolar(
-            r=stock_vals, theta=cats, fill='toself',
+            r=stock_r, theta=stock_theta, fill='toself',
             fillcolor=fill_color, line=dict(color=radar_color, width=2), name=ctx.selected_ticker
         ))
         fig_radar.add_trace(go.Scatterpolar(
-            r=sector_avg_vals, theta=cats, line=dict(color='#94A3B8', width=1.5, dash='dash'), name='Sector Avg'
+            r=sector_r, theta=sector_theta, line=dict(color='#94A3B8', width=1.5, dash='dash'), name='Sector Avg'
         ))
 
         # PATCH NOTE 8 (bugfix): PATCH NOTE 7 หด polar.domain มากไป ทำให้ตัวกราฟ
@@ -500,6 +501,7 @@ def render(ctx):
             use_container_width=True,
             config={"displayModeBar": True, "displaylogo": False},
         )
+        render_chart_note("industry_radar")
 
     # ---------------- PEER COMPARISON (เต็มความกว้าง แทนที่ตำแหน่ง Dimension Percentile Rank เดิม) ----------------
     peers_sorted = ctx.sector_peers.sort_values('overall_score', ascending=False)
