@@ -65,8 +65,11 @@ def _hex_to_rgba(hex_color, alpha):
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def _section_title(text):
-    return f"""<div style="background-color:#FFFFFF; border:1px solid #D9E2EC; border-radius:12px 12px 0 0; padding:14px 18px 2px 18px;">
+def _section_title(text, standalone=False):
+    """standalone=True: กล่องหัวข้อปิดครบทุกด้าน ใช้กับ section ที่เนื้อหาข้างใต้แยกเป็นการ์ดหลายใบ (เช่น MODEL EXPLANATION)
+    เดิมกล่องหัวข้อเปิดด้านล่างแต่ไม่มีการ์ดเดียวมาต่อ จึงดูขาดตอน"""
+    radius, pad = ("12px", "14px 18px") if standalone else ("12px 12px 0 0", "14px 18px 2px 18px")
+    return f"""<div style="background-color:#FFFFFF; border:1px solid #D9E2EC; border-radius:{radius}; padding:{pad};">
 <div><span style="font-size:13px; font-weight:bold; color:{MUTED}; letter-spacing:0.5px;">{text}</span></div></div>"""
 
 
@@ -142,9 +145,8 @@ def _score_donut_card(label, score, badge, desc, color, height=None, display=Non
 
 def render(ctx):
     st.markdown(f"""<div style="margin-bottom:20px;">
-<div style="font-size:12px; color:{MUTED}; margin-bottom:4px;">Home / Module 4 / AI Prediction</div>
-<div style="font-size:19px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">AI PREDICTION</div>
-<div style="font-size:12px; color:#64748B; margin-top:4px;">ประเมินทิศทางราคาหุ้นในอีก 10 วันทำการด้วยโมเดล Random Forest</div>
+<div class="module-title" style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">AI PREDICTION</div>
+<div class="module-subtitle" style="font-size:16px; font-weight:400; color:#64748B; margin-top:4px;">ประเมินทิศทางราคาหุ้นในอีก 10 วันทำการด้วยโมเดล Random Forest</div>
 </div>""", unsafe_allow_html=True)
 
     # ============================================================
@@ -505,11 +507,7 @@ def render(ctx):
 
     show_chart(fig_forecast, key="ai_forecast", expand_height=700)
 
-    st.markdown(
-        f"""<div style="font-size:11px; color:{MUTED}; padding:8px 16px 12px 16px; background:#FFFFFF; border:1px solid #D9E2EC; border-top:none; border-radius:0 0 12px 12px;">
-* เส้นทึบฟ้า = ราคาจริงที่เกิดขึ้นแล้ว | เส้นประสี = ค่ากลางที่โมเดลคาดการณ์ | แถบทึบแสง = ช่วงคาดการณ์ (~80%) จาก Volatility จริง ({safe(ctx.stock_info.get('volatility')):.1f}%) — ไม่ใช่การรับประกันผลตอบแทน</div>""",
-        unsafe_allow_html=True
-    )
+    # [FIX-UI8] ตัดกล่องข้อความอธิบายใต้กราฟ Forecast ออก — เนื้อหาเดียวกันอยู่ในแถบ "ⓘ วิธีอ่านกราฟ" แล้ว
 
     st.markdown("<div style='margin-top:22px;'></div>", unsafe_allow_html=True)
 
@@ -517,7 +515,7 @@ def render(ctx):
     # 4) MODEL EXPLANATION — โมเดลตัดสินใจจากอะไร
     # ============================================================
 
-    st.markdown(_section_title("MODEL EXPLANATION"), unsafe_allow_html=True)
+    st.markdown(_section_title("MODEL EXPLANATION", standalone=True), unsafe_allow_html=True)
 
     exp_c1, exp_c2 = st.columns([1.4, 1])
 
@@ -525,22 +523,30 @@ def render(ctx):
 
     with exp_c1:
         if not fi.empty:
+            # [FIX-UI8] สีม่วงประจำโมดูล AI (#A855F7 เดียวกับเมนูด้านข้าง), เพิ่มชื่อแกน X,
+            # ขยายแกน X ให้ตัวเลขแท่งยาวสุดไม่ถูกตัด และ automargin ให้ชื่อ Feature ยาว ๆ ไม่ถูกตัดบนจอแคบ
+            AI_PURPLE = "#A855F7"
+            x_max = float(fi['importance'].max()) if len(fi) else 1.0
             fig_shap = go.Figure(
                 go.Bar(
                     x=fi['importance'], y=fi['feature'], orientation='h',
-                    marker=dict(color=BLUE),
+                    marker=dict(color=AI_PURPLE),
                     text=[f"{v:.3f}" for v in fi['importance']],
                     textposition='outside',
+                    cliponaxis=False,
                     textfont=dict(size=11, color='#334155')
                 )
             )
             fig_shap.update_layout(
-                height=240,
-                margin=dict(l=10, r=50, t=10, b=10),
+                height=max(280, 24 * len(fi) + 70),
+                margin=dict(l=10, r=20, t=10, b=10),
                 paper_bgcolor="#FFFFFF",
                 plot_bgcolor="#FFFFFF",
-                xaxis=dict(gridcolor="#D9E2EC", tickfont=dict(size=10, color=MUTED), zeroline=False),
-                yaxis=dict(tickfont=dict(size=10.5, color="#334155"), gridcolor="#D9E2EC", zeroline=False),
+                xaxis=dict(title=dict(text="คะแนน", font=dict(size=12, color=MUTED)),
+                           range=[0, x_max * 1.3], gridcolor="#D9E2EC",
+                           tickfont=dict(size=10, color=MUTED), zeroline=False, automargin=True),
+                yaxis=dict(tickfont=dict(size=10.5, color="#334155"), gridcolor="#D9E2EC",
+                           zeroline=False, automargin=True),
                 showlegend=False
             )
             show_chart(fig_shap, key="ai_feature_importance", expand_height=650)
@@ -557,7 +563,7 @@ EXPLAINABLE AI SUMMARY
 <p style="font-size:13.5px; color:#334155; line-height:1.6; margin:0;">
 โมเดลใช้ {len(fi)} ตัวชี้วัดเชิงเทคนิคในการทำนาย โดย feature ที่มีอิทธิพลต่อผลทำนายของ
 <b>{ctx.selected_ticker}</b> สูงสุดคือ
-<b style="color:{BLUE};">{top_feat}</b>
+<b style="color:#A855F7;">{top_feat}</b>
 — ค่านี้มาจากน้ำหนักจริงที่ Random Forest เรียนรู้ได้ ไม่ใช่ค่าคงที่
 </p>
 </div>""",

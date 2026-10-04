@@ -273,10 +273,10 @@ def render(ctx):
         # หมายเหตุ: แก้แท็ก <div>...</h2> ที่ไม่เข้าคู่กัน (bug จากดราฟก่อนหน้า) ให้เป็น <div>...</div>
         st.html("""
         <div style="margin-bottom:10px;">
-            <div style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">
+            <div class="module-title" style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">
                 COMPANY HEALTH
             </div>
-            <div style="font-size:16px; font-weight:400; color:#64748B; margin-top:4px;">
+            <div class="module-subtitle" style="font-size:16px; font-weight:400; color:#64748B; margin-top:4px;">
                 ประเมินสุขภาพทางการเงินของบริษัทจากมิติสำคัญตามงบการเงินจริง
             </div>
         </div>

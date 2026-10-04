@@ -77,9 +77,11 @@ def render(ctx):
     val_bear, val_bull = lo, hi
 
     st.markdown(
-        """<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:15px;">
-        <div><div style="display:flex; align-items:center; gap:8px;"><h2 style="margin:0; font-size:23px; font-weight:bold; color:#0F172A; letter-spacing:0.5px;">FAIR VALUE</h2></div>
-        <div style="font-size:16px; color:#64748B; margin-top:2px;">ประเมินมูลค่าที่เหมาะสมของหุ้นโดยใช้แบบจำลอง DCF ผสาน P/E Relative</div></div>
+        # [FIX-UI10] หัวข้อหน้าใช้รูปแบบเดียวกับหน้าอื่น (26px / คำอธิบาย 16px / class สำหรับย่อบนจอเล็ก)
+        # เดิมเป็น <h2> 23px ซึ่ง Streamlit ใส่ไอคอนลิงก์และระยะขอบของตัวเองเพิ่ม ทำให้ขนาดไม่เท่าหน้าอื่น
+        """<div style="margin-bottom:20px;">
+        <div class="module-title" style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">FAIR VALUE</div>
+        <div class="module-subtitle" style="font-size:16px; color:#64748B; margin-top:4px;">ประเมินมูลค่าที่เหมาะสมของหุ้นโดยใช้แบบจำลอง DCF ผสาน P/E Relative</div>
         </div>""",
         unsafe_allow_html=True
     )

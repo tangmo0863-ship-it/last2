@@ -116,10 +116,10 @@ def render(ctx):
 
     st.markdown("""
     <div style="margin-bottom:20px;">
-        <div style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">
+        <div class="module-title" style="font-size:26px; font-weight:700; color:#0F172A; letter-spacing:0.3px;">
             INDUSTRY BENCHMARK
         </div>
-        <div style="font-size:16px; color:#64748B; margin-top:4px;">
+        <div class="module-subtitle" style="font-size:16px; color:#64748B; margin-top:4px;">
             เปรียบเทียบศักยภาพของหุ้นกับบริษัทในกลุ่มอุตสาหกรรมและหุ้นที่ติดตาม
         </div>
     </div>
