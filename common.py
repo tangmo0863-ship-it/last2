@@ -353,12 +353,27 @@ def _open_chart_dialog(fig, expand_height):
     )
 
 
+def render_chart_note(key):
+    """แถบพับ 'ⓘ วิธีอ่านกราฟและเทคนิคที่ใช้' ใต้กราฟ — ข้อความทั้งหมดอยู่ใน chart_notes.py
+    (คอมเมนต์อาจารย์: ต้องระบุว่ากราฟแต่ละตัวใช้เทคนิคอะไร ไม่ใช่แสดงแค่กราฟ)"""
+    try:
+        from chart_notes import note_markdown
+    except ImportError:
+        return
+    md = note_markdown(key)
+    if md:
+        with st.expander("ⓘ วิธีอ่านกราฟและเทคนิคที่ใช้", expanded=False):
+            st.markdown(md)
+
+
 def show_chart(fig, key, expand_height=680):
     """แสดงกราฟ Plotly พร้อมปุ่ม '🔍 ขยายกราฟ' ที่เปิดกราฟเวอร์ชันใหญ่ในหน้าต่างลอย (dialog)
-    ใช้แทน st.plotly_chart ตรงๆ ทุกจุดที่เป็นกราฟหลักของหน้า"""
+    ใช้แทน st.plotly_chart ตรงๆ ทุกจุดที่เป็นกราฟหลักของหน้า
+    ถ้า key มีคำอธิบายใน chart_notes.py จะแสดงแถบ 'ⓘ วิธีอ่านกราฟ' ใต้กราฟให้อัตโนมัติ"""
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"{key}_small")
     if st.button("🔍 ขยายกราฟ", key=f"{key}_expand_btn", use_container_width=True):
         _open_chart_dialog(fig, expand_height)
+    render_chart_note(key)
 
 
 def render_nav_footer(key_prefix, prev_page=None, next_page=None, show_home=True):
