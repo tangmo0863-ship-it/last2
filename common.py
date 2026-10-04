@@ -370,7 +370,14 @@ def show_chart(fig, key, expand_height=680):
     """แสดงกราฟ Plotly พร้อมปุ่ม '🔍 ขยายกราฟ' ที่เปิดกราฟเวอร์ชันใหญ่ในหน้าต่างลอย (dialog)
     ใช้แทน st.plotly_chart ตรงๆ ทุกจุดที่เป็นกราฟหลักของหน้า
     ถ้า key มีคำอธิบายใน chart_notes.py จะแสดงแถบ 'ⓘ วิธีอ่านกราฟ' ใต้กราฟให้อัตโนมัติ"""
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"{key}_small")
+    # [FIX-UI9] ให้ Plotly ขยายขอบเองเมื่อชื่อแกน/ตัวเลขยาวเกิน แทนการตัดทิ้งบนจอแคบ (ไม่มีผลกับกราฟเรดาร์)
+    try:
+        fig.update_xaxes(automargin=True)
+        fig.update_yaxes(automargin=True)
+    except Exception:
+        pass
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'responsive': True},
+                    key=f"{key}_small")
     if st.button("🔍 ขยายกราฟ", key=f"{key}_expand_btn", use_container_width=True):
         _open_chart_dialog(fig, expand_height)
     render_chart_note(key)
@@ -760,7 +767,10 @@ def render_sidebar(scores_df):
                 box-sizing: border-box !important;
             }}
 
-            [data-testid="column"] {{
+            /* [FIX-UI9] Streamlit รุ่นใหม่ใช้ data-testid="stColumn" (เดิม "column") — ใส่ทั้งสองชื่อ
+               ไม่งั้นกฎจัดคอลัมน์บนมือถือไม่ทำงานเลย การ์ดจึงถูกบีบอยู่แถวเดียว */
+            [data-testid="column"],
+            [data-testid="stColumn"] {{
                 width: 100% !important;
                 max-width: 100% !important;
                 min-width: 0 !important;
@@ -838,9 +848,27 @@ def render_sidebar(scores_df):
                 box-sizing: border-box !important;
             }}
 
-            [data-testid="column"] {{
+            [data-testid="column"],
+            [data-testid="stColumn"] {{
                 min-width: 0 !important;
                 box-sizing: border-box !important;
+            }}
+
+            /* [FIX-UI9] แถวที่มีการ์ดตั้งแต่ 4 ใบขึ้นไป (เช่น การ์ด KPI 5 ใบ) ให้ขึ้นบรรทัดใหม่เป็นแถวละ 3 ใบ
+               แทนการบีบทุกใบให้แคบจนข้อความตกบรรทัด — แถว 2-3 คอลัมน์ยังอยู่บรรทัดเดียวตามเดิม */
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(4)),
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(4)) {{
+                flex-wrap: wrap !important;
+                row-gap: 1rem !important;
+            }}
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(4)) > [data-testid="stColumn"],
+            [data-testid="stHorizontalBlock"]:has(> [data-testid="column"]:nth-child(4)) > [data-testid="column"] {{
+                flex: 1 1 calc(33.333% - 1rem) !important;
+                min-width: 200px !important;
+            }}
+
+            .module-title {{
+                font-size: 24px !important;
             }}
 
             .stMarkdown,
