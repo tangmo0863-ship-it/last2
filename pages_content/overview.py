@@ -16,6 +16,13 @@ from common import (
     COMPANY_NAMES, SECTOR_MAP
 )
 
+# [FIX-UI7] ถ้า common.py ใน repo ยังเป็นเวอร์ชันเก่าที่ไม่มี render_chart_note แอปจะไม่พัง (แค่ไม่แสดงคำอธิบายใต้กราฟ)
+try:
+    from common import render_chart_note
+except ImportError:
+    def render_chart_note(key):
+        return None
+
 
 def render(ctx):
 
@@ -600,6 +607,7 @@ def render(ctx):
             yaxis=dict(showgrid=False, showticklabels=False)
         )
         st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+        render_chart_note("overview_spark")
 
         market_cap = safe(ctx.stock_info.get('market_cap_mb'))
         fcf_latest = safe(ctx.stock_info.get('free_cash_flow_latest'))

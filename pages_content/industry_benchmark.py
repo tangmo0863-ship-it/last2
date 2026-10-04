@@ -89,7 +89,14 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
-from common import fmt_mb, fmt_ratio, safe, render_nav_footer, render_chart_note, COMPANY_NAMES, SECTOR_MAP
+from common import fmt_mb, fmt_ratio, safe, render_nav_footer, COMPANY_NAMES, SECTOR_MAP
+
+# [FIX-UI7] ถ้า common.py ใน repo ยังเป็นเวอร์ชันเก่าที่ไม่มี render_chart_note แอปจะไม่พัง (แค่ไม่แสดงคำอธิบายใต้กราฟ)
+try:
+    from common import render_chart_note
+except ImportError:
+    def render_chart_note(key):
+        return None
 
 
 def render(ctx):

@@ -78,6 +78,13 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from common import safe, render_nav_footer
+
+# [FIX-UI7] ถ้า common.py ใน repo ยังเป็นเวอร์ชันเก่าที่ไม่มี render_chart_note แอปจะไม่พัง (แค่ไม่แสดงคำอธิบายใต้กราฟ)
+try:
+    from common import render_chart_note
+except ImportError:
+    def render_chart_note(key):
+        return None
 from calculate_modules.entry_timing import classify_signal
 
 
@@ -697,6 +704,7 @@ def render(ctx):
             )
 
             st.plotly_chart(fig_main, use_container_width=True, config={"displayModeBar": True, "displaylogo": False})
+            render_chart_note("timing_main")
 
     # ==================================================================
     # RIGHT COLUMN
