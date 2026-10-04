@@ -15,7 +15,7 @@ compute_industry_rankings(df_res) รับ:
              timing_score, ai_score, risk_score
 
 คืนค่า df_res เดิม "บวกเพิ่ม" คอลัมน์ต่อไปนี้ (ไม่ลบคอลัมน์เดิม):
-    industry_score   : float 0-100  (percentile ของ health_score ภายในกลุ่ม sector เดียวกัน)
+    industry_score   : float 0-100  (percentile ของ base_score ภายในกลุ่ม sector — ใช้แสดงอันดับ ไม่นับใน overall_score)
     overall_score    : float 0-100  (คะแนนรวมถ่วงน้ำหนักทุกโมดูล — ใช้ทำ Recommendation หน้า Overview)
     sector_rank      : int          (อันดับภายในกลุ่ม sector เดียวกัน จากทั้งหมดที่ติดตาม)
     overall_rank     : int          (อันดับเทียบทั้งหมดที่ติดตาม ไม่แบ่งกลุ่ม)
@@ -23,7 +23,7 @@ compute_industry_rankings(df_res) รับ:
 
 ที่มาของสูตร: ดูละเอียดใน DATA_FORMULA_AUDIT.md หัวข้อ 6-7 (Industry Benchmark + Overall Score)
 สรุปสั้น: การจัดอันดับ (rank) และ percentile เป็นวิธีทางสถิติมาตรฐาน (pandas.rank())
-แต่น้ำหนักถ่วง Overall Score (25/25/15/10/15/10%) และเกณฑ์ Recommendation (75/65/50)
+แต่น้ำหนักถ่วง Overall Score (25/25/15/10/15% ของ 5 โมดูล — Industry ไม่ถูกนับซ้ำแล้ว ดู FIX-I1) และเกณฑ์ Recommendation (75/65/50)
 เป็นค่าที่กำหนดเองทั้งหมด — จุดสำคัญ: ฐานเทียบมีแค่ 8 หุ้นเท่านั้น ไม่ใช่ทั้งตลาด SET จริง
 """
 
@@ -34,7 +34,12 @@ import pandas as pd
 
 BASE_WEIGHTS = {'health_score': 0.25, 'valuation_score': 0.25,
                 'timing_score': 0.15, 'ai_score': 0.10, 'risk_score': 0.15}
-INDUSTRY_WEIGHT = 0.10
+# [FIX-I1] Industry Score ไม่ถูกนับใน Overall Score แล้ว (เดิม 10%)
+# เหตุผล: industry_score คือ percentile ของ base_score ซึ่งคำนวณจากคะแนน 5 โมดูลเดียวกันกับที่รวมอยู่ใน Overall
+# การบวกเข้าไปอีก 10% จึงเป็นการนับคะแนนเดิมซ้ำ ตอนนี้ Overall = ค่าเฉลี่ยถ่วงน้ำหนักของ 5 โมดูล
+# (Health 25 / Valuation 25 / Timing 15 / AI 10 / Risk 15 → ปรับสัดส่วนให้รวมเป็น 100% อัตโนมัติ
+#  คือ 27.8 / 27.8 / 16.7 / 11.1 / 16.7) ส่วน industry_score ยังคำนวณไว้แสดงอันดับในกลุ่มบนหน้าจอเหมือนเดิม
+INDUSTRY_WEIGHT = 0.0
 MIN_SECTOR_SIZE = 2
 NO_DATA_LABEL = "ข้อมูลไม่พอ"
 
@@ -79,7 +84,8 @@ def compute_industry_rankings(df_res):
     df_res['industry_score_basis'] = np.where(df_res['sector_comparable'], 'sector', 'universe')
 
     # คะแนนรวมถ่วงน้ำหนัก — น้ำหนักนี้เป็นค่าที่กำหนดเอง ปรับได้ตามที่ทีมเห็นสมควร
-    df_res['overall_score'] = _weighted_mean(df_res, {**BASE_WEIGHTS, 'industry_score': INDUSTRY_WEIGHT})
+    df_res['overall_score'] = (_weighted_mean(df_res, {**BASE_WEIGHTS, 'industry_score': INDUSTRY_WEIGHT})
+                               if INDUSTRY_WEIGHT > 0 else df_res['base_score'])          # FIX-I1
 
     df_res['sector_rank'] = df_res.groupby(sector_key)['overall_score'].rank(ascending=False, method='min').astype('Int64')
     df_res['overall_rank'] = df_res['overall_score'].rank(ascending=False, method='min').astype('Int64')

@@ -21,6 +21,12 @@ key ใหม่: volatility_static, max_drawdown_static, risk_dims_used, risk_d
 - [FIX-R4] ไม่มี PSR → มิติ quality = None (เดิมใส่ 50 ปลอม)
 - [FIX-R6] ถ้า stock_risk_metrics.csv มาจาก compute_beta.py (มีคอลัมน์ Beta Source) → beta_verified = True
   และแสดงที่มา/ช่วงข้อมูลของ Beta พร้อม Downside Beta (Ang, Chen & Xing 2006) ถ้าเป็นไฟล์เดิม → ยังเตือนเหมือนเดิม
+- [FIX-R7] ช่วงข้อมูลความเสี่ยง = 3 ปีล่าสุด (เดิมใช้ราคาทั้งหมดในไฟล์ ซึ่งตอนนี้ยาว 10 ปี)
+  ให้ Volatility / Max Drawdown / VaR / CVaR / Sharpe / Sortino / PSR / กราฟ Rolling ใช้ช่วงเดียวกับ Beta
+  ตาม Daves, Ehrhardt & Kunkel (2000) ที่แนะนำผลตอบแทนรายวันและช่วงไม่เกิน 3 ปี
+  TRUE ใช้ข้อมูลตั้งแต่ 3 มี.ค. 2023 (หลังควบรวม TRUE-DTAC) เหมือน compute_beta.py
+  และตัดแถววันหยุดปลอม (Volume = 0 และ High = Low = Close) ที่ทำให้ผลตอบแทน 0% เกินจริง
+  ปรับช่วงได้ที่ RISK_WINDOW_YEARS (ตั้ง None = ใช้ข้อมูลทั้งหมดแบบเดิม)
 - [FIX-R5] Risk Score คำนวณจากมิติที่มีจริง (ถ่วงน้ำหนักใหม่) ต้องมีอย่างน้อย 4 ใน 5 มิติ
   และเลิก clip 25-92 → ช่วง 0-100
 """
@@ -32,6 +38,10 @@ from calculate_modules.common import clean_float
 
 RISK_FREE_RATE_ANNUAL = 0.02
 
+# FIX-R7: ช่วงข้อมูลที่ใช้วัดความเสี่ยง (ให้ตรงกับ compute_beta.py → BETA_WINDOW_YEARS, TICKER_START_OVERRIDE)
+RISK_WINDOW_YEARS = 3
+RISK_TICKER_START_OVERRIDE = {"TRUE": "2023-03-03"}   # หลังควบรวม TRUE-DTAC
+
 RISK_WEIGHT_TAIL = 0.30
 RISK_WEIGHT_DRAWDOWN = 0.25
 RISK_WEIGHT_VOLATILITY = 0.20
@@ -41,6 +51,28 @@ MIN_RISK_DIMS = 4
 
 BETA_VERIFIED = False
 BETA_UNVERIFIED_NOTE = "⚠️ Beta มาจาก stock_risk_metrics.csv ยังไม่ยืนยันแหล่งที่มา (Dataset ไม่มีดัชนี SET ให้คำนวณเอง)"
+
+
+def _risk_window(df_price_ticker):
+    """FIX-R7: ตัดข้อมูลให้เหลือช่วงที่ใช้วัดความเสี่ยง + ตัดแถววันหยุดปลอม แล้วคืน (df, คำอธิบายช่วง)"""
+    df = df_price_ticker.sort_values(by='date').reset_index(drop=True).copy()
+    df['date'] = pd.to_datetime(df['date'])
+    if {'volume', 'high', 'low', 'close'}.issubset(df.columns):
+        fake = (pd.to_numeric(df['volume'], errors='coerce') == 0) & (df['high'] == df['low']) & (df['low'] == df['close'])
+        df = df[~fake]
+    if df.empty or RISK_WINDOW_YEARS is None:
+        return df.reset_index(drop=True), "ข้อมูลทั้งหมด"
+    end = df['date'].max()
+    start = end - pd.DateOffset(years=RISK_WINDOW_YEARS) + pd.Timedelta(days=1)
+    note = f"{RISK_WINDOW_YEARS} ปีล่าสุด"
+    ticker = str(df['ticker'].iloc[0]).upper() if 'ticker' in df.columns else ''
+    if ticker in RISK_TICKER_START_OVERRIDE and pd.Timestamp(RISK_TICKER_START_OVERRIDE[ticker]) > start:
+        start = pd.Timestamp(RISK_TICKER_START_OVERRIDE[ticker])
+        note = f"ตั้งแต่ {start.date()} (หลังควบรวม)"
+    df = df[df['date'] >= start].reset_index(drop=True)
+    if not df.empty:
+        note += f" ({df['date'].min().date()} ถึง {df['date'].max().date()})"
+    return df, note
 
 
 def _clean_price_series(df, price_col='close'):
@@ -138,9 +170,8 @@ def _r(v, d=1):
 
 def calculate_risk_module(df_price_ticker, risk_static_row):
     """ตัวชี้วัดความเสี่ยง 5 มิติของหุ้น 1 ตัว"""
-    df = df_price_ticker.sort_values(by='date').reset_index(drop=True)
+    df, risk_window_note = _risk_window(df_price_ticker)            # FIX-R7
     df = _clean_price_series(df, 'close')
-    df['date'] = pd.to_datetime(df['date'])
 
     beta = _static_value(risk_static_row, 'beta')                     # FIX-R3
     downside_beta = _static_value(risk_static_row, 'downside_beta')    # FIX-R6
@@ -161,6 +192,7 @@ def calculate_risk_module(df_price_ticker, risk_static_row):
             'downside_beta': _r(downside_beta, 2), 'beta_r2': _r(beta_r2, 3),
             'volatility_static': vol_static, 'max_drawdown_static': dd_static,
             'risk_dims_used': 0, 'risk_data_note': 'ข้อมูลราคาไม่พอ',
+            'risk_window': risk_window_note,
         }
 
     df['returns'] = df['close'].pct_change()
@@ -241,16 +273,16 @@ def calculate_risk_module(df_price_ticker, risk_static_row):
         'max_drawdown_static': dd_static,
         'risk_dims_used': len(avail),
         'risk_data_note': ('ไม่มีข้อมูลมิติ: ' + ', '.join(missing)) if missing else '',
+        'risk_window': risk_window_note,
     }
 
 
 def build_risk_rolling_history(df_price_ticker):
-    """rolling 30 วันของ Volatility และ Drawdown (ไม่เปลี่ยนในรอบนี้)"""
-    df = df_price_ticker.sort_values(by='date').reset_index(drop=True)
+    """rolling 30 วันของ Volatility และ Drawdown ในช่วงเดียวกับตัวชี้วัดความเสี่ยง (FIX-R7)"""
+    df, _ = _risk_window(df_price_ticker)
     df = _clean_price_series(df, 'close')
     if len(df) < 30:
         return pd.DataFrame(columns=['date', 'rolling_vol_30d', 'drawdown_pct'])
-    df['date'] = pd.to_datetime(df['date'])
     df['returns'] = df['close'].pct_change()
     df['rolling_vol_30d'] = df['returns'].rolling(30).std() * np.sqrt(252) * 100
     cum_max = df['close'].cummax()
