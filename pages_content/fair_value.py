@@ -29,7 +29,55 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 from common import fmt_mb, fmt_ratio, safe, show_chart, render_nav_footer, COMPANY_NAMES, SECTOR_MAP
+try:
+    from common import render_chart_note
+except ImportError:
+    def render_chart_note(key):
+        return None
 from calculate_modules.fair_value import calculate_valuation_module
+
+
+def _render_market_expectation(ctx, price):
+    """การ์ด 'ราคานี้คาดหวังอะไร': ROE ที่ราคาปัจจุบันต้องการ เทียบ ROE จริงของบริษัท (ค่ามาจาก fair_value.market_expectation)"""
+    info = ctx.stock_info
+    implied = safe(info.get('implied_roe'), None)
+    if implied is None:
+        return
+    roe_avg = safe(info.get('roe_hist_avg'), None)
+    roe_last = safe(info.get('roe_latest'), None)
+    gap = safe(info.get('roe_gap'), 0.0)
+    ke = safe(info.get('ke_capm'), None)
+    pb = safe(info.get('pb_current'), None)
+    label = info.get('expectation_label') or '-'
+    color = info.get('expectation_color') or '#64748B'
+    years = info.get('roe_hist_years') or ''
+    gap_txt = f"{gap:+.1f} จุด"
+    sentence = (f"ถ้าซื้อที่ราคา <b>{price:,.2f} บาท</b> (P/B {pb:.2f} เท่า) บริษัทต้องทำ ROE ได้ราว "
+                f"<b style='color:{color};'>{implied:.1f}%</b> ต่อปีไปเรื่อย ๆ จึงจะคุ้มกับความเสี่ยง "
+                f"(ผลตอบแทนที่ผู้ถือหุ้นต้องการ {ke:.2f}%) — ที่ผ่านมาบริษัททำได้เฉลี่ย <b>{roe_avg:.1f}%</b>")
+    stat = lambda title, val, sub, col='#0F172A': f"""<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:10px 12px; min-width:0;">
+<div style="font-size:11px; font-weight:bold; color:#64748B; letter-spacing:0.5px;">{title}</div>
+<div style="font-size:22px; font-weight:bold; color:{col}; margin-top:4px;">{val}</div>
+<div style="font-size:11px; color:#64748B;">{sub}</div></div>"""
+    warn = ""
+    if info.get('fcf_quality_warning') in (1, True):
+        warn = (f"""<div style="margin-top:10px; font-size:12px; color:#92400E; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px;">
+⚠️ FCF สูงกว่ากำไรสุทธิราว {safe(info.get('fcf_to_ni'), 0):.1f} เท่า — มูลค่าแบบ DCF อาจสูงเกินจริง หากบริษัทมีรายจ่ายที่บันทึกในกระแสเงินสดจากการจัดหาเงิน
+(เช่น ค่าเช่าโครงข่าย ค่าใบอนุญาต) ซึ่งไม่อยู่ในชุดข้อมูล</div>""")
+    st.markdown(f"""<div style="background:#FFFFFF; border:1px solid #E2E8F0; border-left:5px solid {color}; border-radius:12px; padding:14px 16px;">
+<div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;">
+<span style="font-size:13px; font-weight:bold; color:#475569; letter-spacing:0.5px;">ราคานี้คาดหวังอะไร (MARKET EXPECTATION)</span>
+<span style="background:{color}; color:#FFFFFF; font-size:12px; font-weight:bold; padding:3px 12px; border-radius:20px;">{label}</span>
+</div>
+<div style="font-size:14px; color:#334155; line-height:1.6; margin:8px 0 12px 0;">{sentence}</div>
+<div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px;">
+{stat("ROE ที่ราคาคาดหวัง", f"{implied:.1f}%", "ต่อปี ระยะยาว", color)}
+{stat("ROE จริงของบริษัท", f"{roe_avg:.1f}%", f"เฉลี่ยปี {years} · ปีล่าสุด {roe_last:.1f}%")}
+{stat("ช่องว่าง", gap_txt, "คาดหวัง − ผลงานจริง", color)}
+</div>{warn}
+</div>""", unsafe_allow_html=True)
+    render_chart_note("market_expectation")
+    st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
 
 
 def render(ctx):
@@ -114,6 +162,7 @@ def render(ctx):
         <div style="display:flex; align-items:center; gap:6px; font-size:13px; font-weight:bold; color:rgba(255,255,255,0.9); letter-spacing:0.5px;">ESTIMATED FAIR VALUE</div>
         <div style="margin-top:6px;"><span style="font-size:30px; font-weight:bold; color:#FFFFFF;">{val_base:.2f}</span> <span style="font-size:14px; color:rgba(255,255,255,0.85);">THB</span></div>
         <div style="font-size:12px; color:rgba(255,255,255,0.85); margin-top:2px;">(Blended: {blend_label})</div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.8); margin-top:2px;">มูลค่าอ้างอิงตามปัจจัยพื้นฐาน ไม่ใช่ราคาเป้าหมาย</div>
         </div>""",
             unsafe_allow_html=True
         )
@@ -149,6 +198,9 @@ def render(ctx):
         )
 
     st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
+
+    # ---- [FIX-UI11] ราคานี้คาดหวังอะไร (Market-Implied ROE) — กติกาเดียวกันทั้ง 8 หุ้น ไม่ต้องเดาอนาคต ----
+    _render_market_expectation(ctx, val_cur_price)
 
     # ---- แถว 2: Fair Value Range (gradient bar) / Confidence Level (arc) / Fair Value Summary Score (donut) ----
     mid_c1, mid_c2, mid_c3 = st.columns([1.6, 1, 1])
