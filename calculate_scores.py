@@ -47,7 +47,7 @@ DB_NAME = "cis_database.db"
 # [FIX-S4] เวอร์ชันของสูตรคำนวณ — บันทึกลง DB ทุกแถว (คอลัมน์ calc_version)
 # common.py (ฝั่ง UI) จะเทียบค่านี้กับใน DB ถ้าไม่ตรง = DB เก่า → คำนวณใหม่อัตโนมัติตอนเปิดแอป
 # ⚠️ ทุกครั้งที่แก้สูตรใน calculate_modules/ ให้เปลี่ยนเลขนี้ (เช่น เพิ่มวันที่) ไม่งั้นเว็บที่ deploy จะยังใช้ตัวเลขเก่า
-CALC_VERSION = "2026-10-05-v15"
+CALC_VERSION = "2026-10-05-v16"
 TARGET_STOCKS = ["ADVANC", "CCET", "DELTA", "HANA", "JMART", "KCE", "THCOM", "TRUE"]
 
 
