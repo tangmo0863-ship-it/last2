@@ -47,7 +47,7 @@ DB_NAME = "cis_database.db"
 # [FIX-S4] เวอร์ชันของสูตรคำนวณ — บันทึกลง DB ทุกแถว (คอลัมน์ calc_version)
 # common.py (ฝั่ง UI) จะเทียบค่านี้กับใน DB ถ้าไม่ตรง = DB เก่า → คำนวณใหม่อัตโนมัติตอนเปิดแอป
 # ⚠️ ทุกครั้งที่แก้สูตรใน calculate_modules/ ให้เปลี่ยนเลขนี้ (เช่น เพิ่มวันที่) ไม่งั้นเว็บที่ deploy จะยังใช้ตัวเลขเก่า
-CALC_VERSION = "2026-10-04-v13"
+CALC_VERSION = "2026-10-05-v15"
 TARGET_STOCKS = ["ADVANC", "CCET", "DELTA", "HANA", "JMART", "KCE", "THCOM", "TRUE"]
 
 
@@ -117,7 +117,10 @@ def run_full_pipeline():
 
         # ===== เรียกฟังก์ชันคำนวณของทั้ง 5 โมดูล =====
         m1 = company_health.calculate_health_module(fin_sub)
-        m2 = fair_value.calculate_valuation_module(fin_sub, current_price, ticker)
+        # [FIX-S5] ส่ง Beta (จาก stock_risk_metrics ที่คำนวณด้วย compute_beta.py) ให้ Fair Value ใช้คำนวณ Ke ด้วย CAPM
+        beta_for_valuation = (clean_float(risk_sub.iloc[0].get("beta"), default=None)
+                              if risk_sub is not None and not risk_sub.empty else None)
+        m2 = fair_value.calculate_valuation_module(fin_sub, current_price, ticker, beta=beta_for_valuation)
         m3 = entry_timing.calculate_timing_module(price_sub)
         m4, feat_imp, backtest_df = ai_prediction.train_and_predict_ai(price_sub, ticker)
         m5 = risk_analysis.calculate_risk_module(price_sub, risk_sub)
