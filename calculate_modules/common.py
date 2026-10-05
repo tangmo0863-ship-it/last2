@@ -11,6 +11,10 @@ import pandas as pd
 
 # แผนที่กลุ่มอุตสาหกรรมของหุ้นทั้ง 8 ตัว — ใช้ทั้งใน fair_value.py (เลือก target P/E ตามกลุ่ม)
 # และใน calculate_scores.py หลัก (กำหนดคอลัมน์ 'sector' ก่อนส่งต่อให้ industry_benchmark.py จัดอันดับ)
+# [FIX-C1] Risk-free rate ค่าเดียวทั้งระบบ — ผลตอบแทนพันธบัตรรัฐบาลไทย 10 ปี ณ สิ้นปี 2568 = 1.66%
+# (ThaiBMA, สรุปภาวะตลาดตราสารหนี้ไทย ปี 2568) ใช้ทั้ง Risk Analysis (Sharpe/Sortino) และ Fair Value (Ke จาก CAPM)
+RISK_FREE_RATE = 0.0166
+
 SECTOR_MAP = {
     'ADVANC': 'Technology & Telecomm',
     'TRUE':   'Technology & Telecomm',
