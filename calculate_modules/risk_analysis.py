@@ -34,9 +34,9 @@ key ใหม่: volatility_static, max_drawdown_static, risk_dims_used, risk_d
 import math
 import numpy as np
 import pandas as pd
-from calculate_modules.common import clean_float
+from calculate_modules.common import clean_float, RISK_FREE_RATE
 
-RISK_FREE_RATE_ANNUAL = 0.02
+RISK_FREE_RATE_ANNUAL = RISK_FREE_RATE   # [FIX-R8] 1.66% จาก ThaiBMA (เดิม 2.0% ที่ทีมกำหนดเอง) ใช้ค่าเดียวกับ Fair Value
 
 # FIX-R7: ช่วงข้อมูลที่ใช้วัดความเสี่ยง (ให้ตรงกับ compute_beta.py → BETA_WINDOW_YEARS, TICKER_START_OVERRIDE)
 RISK_WINDOW_YEARS = 3

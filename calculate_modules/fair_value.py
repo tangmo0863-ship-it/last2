@@ -33,7 +33,7 @@ calculate_modules/fair_value.py — v4 (แก้ "ตัวเลขต้อ�
 
 import numpy as np
 import pandas as pd
-from calculate_modules.common import clean_float, SECTOR_MAP
+from calculate_modules.common import clean_float, SECTOR_MAP, RISK_FREE_RATE
 
 SHARES_OUTSTANDING = {
     'ADVANC': 2974209736,
@@ -71,7 +71,7 @@ NEAR_TERM_GROWTH_PREMIUM = 0.015
 DCF_WEIGHT, PE_WEIGHT = 0.55, 0.45
 
 # FIX-F4: พารามิเตอร์ตลาด (ทุกค่ามีแหล่งอ้างอิง — ดูเอกสาร "ที่มาของตัวเลขและพารามิเตอร์")
-MARKET_RF = 0.0166          # ThaiBMA: Bond yield ไทย 10 ปี ณ สิ้นปี 2568 = 1.66%
+MARKET_RF = RISK_FREE_RATE  # ThaiBMA: Bond yield ไทย 10 ปี ณ สิ้นปี 2568 = 1.66% (calculate_modules/common.py)
 MARKET_ERP = 0.0630         # Damodaran (ctryprem, 5 ม.ค. 2026): Thailand Baa1, ERP 6.30%
 STABLE_GROWTH = 0.020       # จุดกลางกรอบเป้าหมายเงินเฟ้อ ธปท.
 BLUME_W = 0.67              # Beta ปรับแบบ Blume = 0.67 × Beta + 0.33 (ดึงค่าสุดโต่งเข้าหา 1)
