@@ -337,7 +337,7 @@ def render(ctx):
     with r3_c2:
         avg_ret = ctx.stock_daily['close'].pct_change().mean() * 252
         calmar = round(avg_ret * 100 / dd_val, 2) if dd_val > 0 else 0
-        rf_pct = safe(ctx.stock_info.get('risk_free_rate_annual'), 0.02) * 100
+        rf_pct = safe(ctx.stock_info.get('risk_free_rate_annual'), 0.0166) * 100
 
         psr_val = ctx.stock_info.get('psr')
         if _is_missing(psr_val):
@@ -357,7 +357,7 @@ def render(ctx):
 
             footnote = f"""
         <div style="line-height:1.6; font-size:14px; color:#64748B;">
-            <b>• Sharpe:</b> ผลตอบแทนส่วนเกินเทียบความผันผวนรวม (หัก Rf ~{rf_pct:.1f}%/ปี)<br>
+            <b>• Sharpe:</b> ผลตอบแทนส่วนเกินเทียบความผันผวนรวม (หัก Rf {rf_pct:.2f}%/ปี ตามพันธบัตรรัฐบาล 10 ปี)<br>
             <b>• Sortino:</b> ผลตอบแทนส่วนเกินเทียบความผันผวนเฉพาะขาลง (Downside Risk)<br>
             <b>• Calmar:</b> ผลตอบแทนเฉลี่ยต่อปีเทียบกับการขาดทุนลึกสุด (Max Drawdown)<br>
             <b>• PSR:</b> ความน่าจะเป็นทางสถิติที่ Sharpe จริง &gt; 0 โดยปรับแก้ความเบ้/โด่ง (Bailey & López de Prado)
@@ -367,7 +367,7 @@ def render(ctx):
         else:
             grid_cols = 3
             ratio_cells = base_cells
-            footnote = f"""คำนวณหัก Risk-free Rate (~{rf_pct:.1f}%/ปี) แล้ว"""
+            footnote = f"""คำนวณหัก Risk-free Rate ({rf_pct:.2f}%/ปี) แล้ว"""
 
         st.markdown(
             f"""<div style="background-color:#FFFFFF; border:1px solid #D9E2EC; border-radius:12px; padding:14px; min-height:225px; display:flex; flex-direction:column; justify-content:space-between;">
@@ -433,4 +433,5 @@ def render(ctx):
             unsafe_allow_html=True
         )
 
-    render_nav_footer("m5", prev_page=" AI Prediction", next_page=" Industry Benchmark")
+    # [FIX-UI12] หน้า Risk เป็นหน้าโมดูลสุดท้าย — เอาปุ่ม "หน้าถัดไป" ออก (เดิมพาไป Industry Benchmark ซ้ำกับปุ่มหน้าหลัก)
+    render_nav_footer("m5", prev_page=" AI Prediction", next_page=None)
