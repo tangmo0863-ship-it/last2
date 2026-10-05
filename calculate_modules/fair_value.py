@@ -16,6 +16,14 @@ calculate_modules/fair_value.py — v4 (แก้ "ตัวเลขต้อ�
   ถ้าไม่มีคอลัมน์ accounts_payable → ใช้วิธีเดิมและติด debt_basis = 'total_liabilities'
 - [FIX-F2] เลิก clip คะแนนย่อยที่ 25-95 และ safety_score ที่ 10-98 → ใช้ช่วง 0-100
   (การหนีบราคาประเมินไว้ 65%-185% ของราคาตลาดตอนแปลงเป็นคะแนนยังคงไว้ตามดีไซน์เดิม)
+- [FIX-F4] เพิ่ม "ราคานี้คาดหวังอะไร" (Market-Implied ROE) — กลับสมการ Residual Income แบบคงที่
+      ราคาต่อหุ้น = BVPS + (ROE − Ke) × BVPS × (1+g) ÷ (Ke − g)
+  →   ROE ที่ราคาคาดหวัง = Ke + (P/B − 1) × (Ke − g) ÷ (1 + g)
+  แล้วเทียบกับ ROE จริงเฉลี่ย 3 ปีของบริษัทเอง (กติกาเดียวกันทั้ง 8 หุ้น ได้ค่าทุกตัวแม้หุ้นขาดทุน)
+  Ke = Rf + Beta(ปรับแบบ Blume) × ERP: Rf 1.66% (ThaiBMA ผลตอบแทนพันธบัตร 10 ปี ณ สิ้นปี 2568),
+  ERP 6.30% (Damodaran, Country Risk Premiums ประเทศไทย ฉบับ 5 ม.ค. 2026), g 2.0% (จุดกลางกรอบเป้าหมายเงินเฟ้อ ธปท.)
+  ไม่แทนที่ DCF / P/E เดิม (ทดลองแล้ว DCF + CAPM แกว่งรุนแรงเพราะดอกเบี้ยไทยต่ำ และ FCF ของหุ้นสื่อสารสูงเกินจริง
+  เพราะข้อมูลไม่มีค่าเช่าโครงข่าย/ใบอนุญาตคลื่น) — เพิ่มธง fcf_quality_warning เมื่อ FCF > 1.5 เท่าของกำไรสุทธิ
 - [FIX-F3] หุ้นที่ "ไม่มีข้อมูล" (NO_DATA เช่น ไม่มีงบ/ไม่มีราคา/ไม่มีจำนวนหุ้น) เดิมได้ valuation_score = 0.0
   ซึ่งถูกนับเป็น "แพงที่สุด" ในคะแนนรวม → ตอนนี้เป็น None (ไม่นับในคะแนนรวม) เพราะไม่ใช่ความผิดของบริษัท
   ส่วนหุ้นที่ขาดทุน ยังคงกติกาเดิมแต่เขียนให้ชัดเจน: NOT_RATED (EPS และ FCF ติดลบ) = 0 คะแนน และ PARTIAL
@@ -62,6 +70,71 @@ DEFAULT_TARGET_PE = 20.0
 NEAR_TERM_GROWTH_PREMIUM = 0.015
 DCF_WEIGHT, PE_WEIGHT = 0.55, 0.45
 
+# FIX-F4: พารามิเตอร์ตลาด (ทุกค่ามีแหล่งอ้างอิง — ดูเอกสาร "ที่มาของตัวเลขและพารามิเตอร์")
+MARKET_RF = 0.0166          # ThaiBMA: Bond yield ไทย 10 ปี ณ สิ้นปี 2568 = 1.66%
+MARKET_ERP = 0.0630         # Damodaran (ctryprem, 5 ม.ค. 2026): Thailand Baa1, ERP 6.30%
+STABLE_GROWTH = 0.020       # จุดกลางกรอบเป้าหมายเงินเฟ้อ ธปท.
+BLUME_W = 0.67              # Beta ปรับแบบ Blume = 0.67 × Beta + 0.33 (ดึงค่าสุดโต่งเข้าหา 1)
+FCF_NI_WARN = 1.5           # FCF เกินกำไรสุทธิปกติกี่เท่าจึงเตือนว่า FCF อาจสูงเกินจริง
+EXPECT_BANDS = [            # (ช่องว่าง ROE คาดหวัง − ROE จริง, ป้าย, สี)
+    (-2.0, "ราคาคาดหวังต่ำกว่าผลงานจริง", "#10B981"),
+    (2.0, "ราคาสอดคล้องกับผลงานจริง", "#10B981"),
+    (10.0, "ราคาคาดหวังสูงกว่าผลงานจริง", "#F59E0B"),
+    (float("inf"), "ราคาคาดหวังสูงกว่าผลงานจริงมาก", "#EF4444"),
+]
+
+
+def market_expectation(df_fin_ticker, current_price, ticker, beta=None):
+    """FIX-F4: ROE ที่ราคาปัจจุบันคาดหวัง เทียบ ROE จริงของบริษัท — ไม่ต้องเดาการเติบโตในอนาคต"""
+    keys = ['ke_capm', 'beta_used', 'beta_adjusted', 'bvps', 'pb_current', 'roe_hist_avg', 'roe_latest',
+            'roe_hist_years', 'implied_roe', 'roe_gap', 'expectation_label', 'expectation_color',
+            'expectation_note', 'fcf_quality_warning', 'fcf_to_ni']
+    out = {k: None for k in keys}
+    shares = SHARES_OUTSTANDING.get(str(ticker).replace('.BK', '').strip().upper())
+    if df_fin_ticker is None or df_fin_ticker.empty or not shares or current_price is None or current_price <= 0:
+        out['expectation_note'] = 'ข้อมูลไม่พอสำหรับคำนวณ'
+        return out
+    g = df_fin_ticker.sort_values('year')
+    ni = g['net_income'].apply(clean_float, default=np.nan)
+    eq = g['total_equity'].apply(clean_float, default=np.nan)
+    roe_y = (ni / eq.where(eq > 0)).dropna()
+    equity_now = clean_float(g.iloc[-1].get('total_equity'), default=None)
+    if roe_y.empty or equity_now is None or equity_now <= 0:
+        out['expectation_note'] = 'ส่วนผู้ถือหุ้นติดลบหรือไม่มีข้อมูล ROE'
+        return out
+
+    b_raw = clean_float(beta, default=None)
+    b_used = 1.0 if b_raw is None else b_raw
+    b_adj = BLUME_W * b_used + (1 - BLUME_W)
+    ke = MARKET_RF + b_adj * MARKET_ERP
+    bvps = equity_now / shares
+    pb = current_price / bvps
+    implied = ke + (pb - 1) * (ke - STABLE_GROWTH) / (1 + STABLE_GROWTH)
+    roe_avg = float(roe_y.mean())
+    gap_pts = (implied - roe_avg) * 100
+    label, color = next((lab, col) for thr, lab, col in EXPECT_BANDS if gap_pts <= thr)
+
+    # ธงคุณภาพ FCF: เทียบ FCF ฐาน (เฉลี่ย 2 ปี เหมือน DCF) กับกำไรสุทธิที่เป็นบวก (กำไรปกติ ถ้าไม่บวกใช้ปีล่าสุด)
+    fcf = g['free_cash_flow'].apply(clean_float, default=np.nan).tail(2).mean()
+    ni_candidates = [x for x in (roe_avg * equity_now, clean_float(g.iloc[-1].get('net_income'), default=None))
+                     if x is not None and x > 0]
+    ni_ref = ni_candidates[0] if ni_candidates else None
+    fcf_ratio = (fcf / ni_ref) if (ni_ref and pd.notna(fcf) and fcf > 0) else None
+
+    out.update({
+        'ke_capm': round(ke * 100, 2), 'beta_used': round(b_used, 2), 'beta_adjusted': round(b_adj, 2),
+        'bvps': round(bvps, 2), 'pb_current': round(pb, 2),
+        'roe_hist_avg': round(roe_avg * 100, 1), 'roe_latest': round(float(roe_y.iloc[-1]) * 100, 1),
+        'roe_hist_years': f"{int(g['year'].iloc[0])}-{int(g['year'].iloc[-1])}",
+        'implied_roe': round(implied * 100, 1), 'roe_gap': round(gap_pts, 1),
+        'expectation_label': label, 'expectation_color': color,
+        'expectation_note': ('Beta ไม่มีข้อมูล ใช้ค่าตลาด 1.0' if b_raw is None else ''),
+        'fcf_quality_warning': bool(fcf_ratio is not None and fcf_ratio > FCF_NI_WARN),
+        'fcf_to_ni': None if fcf_ratio is None else round(float(fcf_ratio), 2),
+    })
+    return out
+
+
 VALUATION_METHODOLOGY_NOTE = (
     "WACC และ Target P/E อ้างอิงตาม Sector Baseline Benchmark 3 กลุ่มอุตสาหกรรมใน SET: "
     "กลุ่ม Tech & Telecom (WACC 7.8%, Target P/E 22.0x, g 2.0%), "
@@ -91,6 +164,9 @@ def _empty_output(message):
     out['confidence_level'] = 'Low'
     out['valuation_methodology_note'] = VALUATION_METHODOLOGY_NOTE
     out['warning_message'] = message
+    out.update({k: None for k in ['ke_capm', 'beta_used', 'beta_adjusted', 'bvps', 'pb_current', 'roe_hist_avg',
+                                  'roe_latest', 'roe_hist_years', 'implied_roe', 'roe_gap', 'expectation_label',
+                                  'expectation_color', 'expectation_note', 'fcf_quality_warning', 'fcf_to_ni']})
     return out
 
 
@@ -207,7 +283,7 @@ def calculate_valuation_module(df_fin_ticker, current_price, ticker, beta=None, 
     dcf_r = round(raw_dcf_fair_value, 2) if raw_dcf_fair_value is not None else None
     pe_r = round(raw_pe_fair_value, 2) if raw_pe_fair_value is not None else None
 
-    return {
+    out = {
         'valuation_score': val_score,
         'fair_value': blended_fair,
         'dcf_fair_value': dcf_r, 'pe_fair_value': pe_r,
@@ -255,6 +331,8 @@ def calculate_valuation_module(df_fin_ticker, current_price, ticker, beta=None, 
         'debt_basis': debt_basis,
         'debt_excluded_payables': round(ap_excluded, 1),
     }
+    out.update(market_expectation(df_fin_ticker, current_price, ticker, beta))     # FIX-F4
+    return out
 
 
 def build_fair_value_yearly(df_fin_ticker, df_price_ticker, ticker):
